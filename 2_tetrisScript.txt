@@ -1,0 +1,429 @@
+function TIC()
+	 Start()
+		Input()
+		UpdateGeneric()
+		RenderGeneric()
+		
+		scenes.tic.timer=
+			scenes.tic.timer+1
+		if scenes.tic.timer>(scenes.tic.dur/scenes.tic.speed) then
+			scenes.tic.timer=0
+		end
+		Flow()
+end
+
+function Start()
+	if not started then
+		started=true
+		InitBoard()
+		ResetCurPiece()
+	end
+end
+function Input()
+	if btn(1)then
+		scenes.tic.speed=6
+	else
+		scenes.tic.speed=1
+	end
+
+	if btnp(2)then
+		MovePiece(curPiece,-1)
+	elseif btnp(3)then
+		MovePiece(curPiece,1)
+	end
+	
+	if btnp(4)then
+		RotatePiece(curPiece)
+	end
+end
+function UpdateGeneric()
+end
+--Render
+Colors={
+	RED=1,
+	OFF_WHITE=2
+}
+function RenderGeneric()
+	cls()
+	RenderBoard()
+	RenderDebug()
+end
+function RenderDebug()
+	local cX,cY=30,30
+	for _,p in ipairs(curPiece.img) do
+		local x=p.x*board.unitL
+		local y=p.y*board.unitL
+		x,y=x+cX,y+cY
+		
+		rect(x,y,board.unitL,board.unitL,12)
+	end
+end
+function RenderBoard()
+	local boardW,boardH=
+		board.w*board.unitL+board.unitL,
+		board.h*board.unitL+board.unitL
+	
+	--Grid
+	for i=0,board.w+1 do
+		local x=i*board.unitL
+		x=x+board.xPivot
+		local y=board.yPivot
+		
+		line(
+			x,y,
+			x,y+boardH,
+			Colors.OFF_WHITE)
+	end
+	for i=0,board.h+1 do
+		local x=board.xPivot
+		local y=i*board.unitL
+		y=y+board.yPivot
+		line(
+			x,y,
+			x+boardW,y,
+			Colors.OFF_WHITE)
+	end
+	
+	--Pieces
+	for i=0,board.w do
+		for j=0,board.h do
+			if board.pieces[i][j] then
+				local x=
+					board.xPivot+(i*board.unitL)
+				local y=
+					board.yPivot+(j*board.unitL)
+				
+				rect(
+					x,y,
+					board.unitL,board.unitL,
+					Colors.RED)
+			end
+		end
+	end
+end
+
+--Flow
+scenes={
+	GenPiece=1,
+	PlayPiece=2,
+	PrepNextPlay=3,
+	DestroyingRows=4,
+		
+	tic={
+		timer=0,
+		dur=20,
+		speed=1
+	}
+}
+curScene=scenes.GenPiece
+function Flow()
+	if curScene==scenes.GenPiece then
+		Scene_GenPiece()
+	elseif curScene==scenes.PlayPiece then
+		Scene_PlayPiece()	
+	elseif curScene==scenes.PrepNextPlay then
+		Scene_PrepNextPlay()
+	elseif curScene==scenes.DestroyingRows then
+		Scene_DestroyingRows()
+	end
+end
+
+scene_GenPiece={
+	tic=0,
+	ticDur=3
+}
+function Scene_GenPiece()
+	--Per tic
+	if scenes.tic.timer==0 then	
+	 scene_GenPiece.tic=
+		 scene_GenPiece.tic+1
+	end
+	
+	--Animtion
+	local off=
+		scene_GenPiece.tic/
+		scene_GenPiece.ticDur
+	local l=board.unitL*off
+	DrawPiece(curPiece,l)
+	
+	--End scene
+	if scene_GenPiece.tic>=scene_GenPiece.ticDur then
+		curScene=scenes.PlayPiece
+		
+		scene_GenPiece.tic=0
+	end
+end
+
+scene_PlayPiece={
+}
+function Scene_PlayPiece()
+	--Per tic
+	if scenes.tic.timer==0 then
+		curPiece.pos.y=
+			curPiece.pos.y+1
+	end
+	
+	--Animation
+	DrawPiece(curPiece,board.unitL)
+	
+	--Collision detetction
+	if PieceTouchedPiece(curPiece)or
+				PieceReachedGround(curPiece)then
+		
+		curScene=scenes.PrepNextPlay
+		FillBoardWithPiece(curPiece)
+	end
+end
+
+scene_PrepNextPlay={
+}
+function Scene_PrepNextPlay()
+	ResetCurPiece()
+	curScene=scenes.GenPiece
+end
+
+scene_DestroyingRows={
+	rows={}
+}
+function Scene_DestroyingRows()
+	local maxY=0
+	local rCount=0
+	for _,y in ipairs(scene_DestroyingRows.rows)do
+		for x=0,board.w do
+			board.pieces[x][y]=false
+		end
+		if y>maxY then maxY=y end
+		rCount=rCount+1
+	end
+	
+	for y=maxY,rCount,-1 do
+		for x=0,board.w do
+			board.pieces[x][y]=
+				board.pieces[x][y-rCount]
+				
+		end
+	end
+	
+	scene_DestroyingRows.rows={}
+	ResetCurPiece()
+	curScene=scenes.GenPiece
+end
+
+--System: Board
+board={
+	w=7,h=11,
+	unitL=6,
+	xPivot=nil,yPivot=nil,
+	pieces={}
+}
+function InitBoard()
+	board.xPivot=
+		120-(board.w*board.unitL/2)
+	board.yPivot=
+		68-(board.h*board.unitL/2)
+		
+	for i=0,board.w do
+		board.pieces[i]={}
+		for j=0,board.h do
+			board.pieces[i][j]=false
+		end
+	end
+end
+function FillBoardWithPiece(piece)
+	for _,p in ipairs(piece.img)do
+		local x=piece.pos.x+p.x
+		local y=piece.pos.y+p.y
+		
+		board.pieces[x][y]=true
+	end
+	
+	local shouldDestroyRows=false
+	for y=0,board.h do
+		for x=0,board.w do
+			if board.pieces[x][y]==false then
+				goto next_row
+			end
+		end
+		
+		shouldDestroyRows=true
+		table.insert(scene_DestroyingRows.rows,y)
+		
+		::next_row::
+	end
+	
+	if shouldDestroyRows then
+		curScene=scenes.DestroyingRows
+	end	
+end
+
+--System Pieces
+curPiece=nil
+function ResetCurPiece()
+	curPiece=GenRandomPiece()
+end
+function GenRandomPiece()
+	local piece={
+		img={},
+		pos={
+			x=math.ceil(board.w/2),
+			y=-4
+		},
+		rotatable=true
+	}
+	
+	local size=7
+	local i=math.ceil(math.random()*size)
+	if i==1 then
+		piece.img[1]={x=0,y=0}
+		piece.img[2]={x=1,y=0}
+		piece.img[3]={x=1,y=1}
+		piece.img[4]={x=0,y=1}
+		piece.rotatable=false
+	elseif i==2 then
+		piece.img[1]={x=0,y=0}
+		piece.img[2]={x=-1,y=0}
+		piece.img[3]={x=1,y=0}
+		piece.img[4]={x=2,y=0}
+	elseif i==3 then
+		piece.img[1]={x=0,y=0}
+		piece.img[2]={x=1,y=0}
+		piece.img[3]={x=0,y=-1}
+		piece.img[4]={x=-1,y=-1}
+	elseif i==4 then
+		piece.img[1]={x=0,y=0}
+		piece.img[2]={x=-1,y=0}
+		piece.img[3]={x=0,y=-1}
+		piece.img[4]={x=1,y=-1}
+	elseif i==5 then
+		piece.img[1]={x=0,y=0}
+		piece.img[2]={x=-1,y=0}
+		piece.img[3]={x=1,y=0}
+		piece.img[4]={x=1,y=1}
+	elseif i==6 then
+		piece.img[1]={x=0,y=0}
+		piece.img[2]={x=-1,y=0}
+		piece.img[3]={x=1,y=0}
+		piece.img[4]={x=1,y=-1}
+	elseif i==7 then
+		piece.img[1]={x=0,y=0}
+		piece.img[2]={x=-1,y=0}
+		piece.img[3]={x=1,y=0}
+		piece.img[4]={x=0,y=1}
+	end
+	
+	return piece
+end
+function MovePiece(piece,dir)
+	if not PieceCanMove(piece,dir)then
+		return
+	end
+	
+	piece.pos.x=
+		piece.pos.x+dir
+end
+function RotatePiece(piece)
+	if not piece.rotatable or
+				not PieceCanRotate(piece) then 
+		return
+	end
+	
+	for _,p in ipairs(curPiece.img)do
+		--Rotate
+		p.x,p.y=-p.y,p.x
+	end
+end
+function DrawPiece(piece,l)
+	print(#piece.img,20,20)
+	for i,p in ipairs(piece.img)do
+		local x=
+			piece.pos.x+p.x
+		x=x*board.unitL
+		x=x+board.xPivot
+		local y=
+			piece.pos.y+p.y
+		y=y*board.unitL
+		y=y+board.yPivot
+
+		rect(x,y,l,l,12)
+	end
+end
+function PieceIsAtEdge(piece)
+	for _,p in ipairs(piece.img)do
+		local x=piece.pos.x+p.x
+		if x==0 or x==board.w-1 then
+			return true
+		end
+	end
+	
+	return false
+end
+function PieceCanMove(piece,dir)
+	for _,p in ipairs(piece.img)do
+		local x=piece.pos.x+p.x+dir
+		local y=piece.pos.y+p.y
+		--Break edge
+		if x<0 or x>board.w then
+			return false
+		end
+		--Break another piece
+		if board.pieces[x][y] then
+			return false
+		end
+	end
+	
+	return true
+end
+function PieceCanRotate(piece)
+	for _,p in ipairs(piece.img)do
+		local x,y=-p.y,p.x
+		x=x+piece.pos.x
+		y=y+piece.pos.y
+		
+		if x<0 or x>board.w then
+			return false
+		elseif board.pieces[x][y] then
+			return false
+		end
+	end
+	
+	return true
+end
+function PieceTouchedPiece(piece)
+	local cX,cY=piece.pos.x,piece.pos.y
+	
+	for _,p in ipairs(piece.img)do
+		local x=p.x+cX
+		local y=p.y+cY
+		if board.pieces[x][y+1] then
+			return true
+		end
+	end
+	
+	return false
+end
+function PieceReachedGround(piece)
+	local cX,cY=piece.pos.x,piece.pos.y
+	
+	for _,p in ipairs(piece.img)do
+		local x=p.x+cX
+		local y=p.y+cY
+		if y==board.h then
+			return true
+		end
+	end
+	
+	return false
+end
+
+--Math
+function Magnitude(x,y)
+	return math.sqrt(
+		x^2 + y^2
+	)
+end
+function CutOff(val,max,min)
+	return
+		(val>max and max)or
+		(val<min and min)or
+		val
+end

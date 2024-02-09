@@ -1,0 +1,385 @@
+function TIC()
+	Start()
+	Input()
+	Render()
+	Update()
+end
+
+--Start
+Colors={
+	BLACK=1,
+	RED=2,
+	WHITE=12,
+	ORANGE=3,
+	GREY=4
+}
+timer=0
+function Start()
+	if not started then
+		started=true
+		InitEnemies()
+	end
+end
+--Input
+function Input()
+	if btn(2)then
+		MovePlayer(-1)
+	elseif btn(3)then
+		MovePlayer(1)
+	end
+	
+	if btnp(4)then
+		PlayerShoot()
+	end
+end
+--Render
+function Render()
+	cls(1)
+	RenderParticles()
+	RenderExplosions()
+	RenderPlayer()
+	RenderEnemies()
+end
+function RenderParticles()
+	for i=#particles,1,-1 do
+		local p=particles[i]
+		
+		circ(
+			p.pos.x,p.pos.y,
+			p.r,
+			p.c)
+	end
+end
+function RenderExplosions()
+	for i=#explosions,1,-1 do
+		local e=explosions[i]
+		
+		circ(
+			e.pos.x,e.pos.y,
+			e.r,
+			e.c)
+	end
+end
+function RenderPlayer()
+	if not player.alive then
+		return
+	end
+	spr(
+		player.sprN,
+		player.pos.x,player.pos.y, 0)
+	
+	RenderPlayer_Bullets()
+end
+function RenderPlayer_Bullets()
+	for _,p in ipairs(player.bullets)do
+		pix(p.pos.x,p.pos.y,12)
+	end
+end
+function RenderEnemies()
+	local switch=1
+	for _,e in ipairs(enemies)do
+		switch=1-switch
+		local sprN=
+			1+(enemiesSettings.switchSpr+switch)%2
+			
+		spr(
+			sprN,
+			e.pos.x,e.pos.y,
+			0)
+	end
+end
+--Update
+function Update()
+	UpdateParticles()
+	UpdateExplosions()
+	
+	if player.alive then
+		UpdatePlayer()
+	end
+	UpdateEnemies()
+	
+	timer=timer+1
+end
+function UpdatePlayer()
+	UpdatePlayer_Bullets()
+	UpdatePlayer_Particles()
+end
+function UpdateParticles()
+	for i=#particles,1,-1 do
+		local p=particles[i]
+		
+		p.pos.x=
+			p.pos.x+p.vel.x
+		p.pos.y=
+			p.pos.y+p.vel.y
+		
+		p.timer=
+			p.timer-1
+		if p.timer<=0 then
+			table.remove(particles,i)
+		end
+	end
+end
+function UpdateExplosions()
+	for i=#explosions,1,-1 do
+		local e=explosions[i]
+		
+		if e.timer1>0 then
+			e.timer1=
+				e.timer1-1
+			
+			e.r=
+				e.rBase*(1-(e.timer1/e.timer1Base))
+		elseif e.timer2>0then
+			e.timer2=
+				e.timer2-1
+			
+			e.r=
+				e.rBase*(e.timer2/e.timer2Base)
+		else
+			table.remove(explosions,i)
+		end
+	end
+end
+function UpdatePlayer_Bullets()
+	for i=#player.bullets,1,-1 do
+		local bullet=player.bullets[i]
+		
+		bullet.timer=
+			bullet.timer-1
+		if bullet.timer<=0 then
+			table.remove(player.bullets,i)
+		end
+		
+		bullet.pos.y=
+			bullet.pos.y-player.bulletSpeed
+	end
+end
+function UpdatePlayer_Particles()
+	for i=1,1 do
+		local pos={
+			x=player.pos.x+4,
+			y=player.pos.y+8
+		}
+		local vel={
+			x=0+(math.random()-.5)*1,
+			y=1
+		}
+		GenParticle(
+			pos,vel,
+			1,Colors.ORANGE)
+	end
+end
+function UpdateEnemies()
+	if timer%enemiesSettings.ticDur==0 then
+		enemiesSettings.switchSpr=
+			1-enemiesSettings.switchSpr
+		enemiesSettings.ticDur=
+			enemiesSettings.ticDur-1
+		
+		MoveEnemies()
+	end
+	EnemiesCollisions()
+end
+function MoveEnemies()
+	for _,e in ipairs(enemies)do
+		e.pos.y=
+			e.pos.y+1
+	end
+end
+function EnemiesCollisions()
+	for i=#enemies,1,-1 do
+		local e=enemies[i]
+		for j=#player.bullets,1,-1 do
+			local p=player.bullets[j]
+			if InRange(
+							p.pos.x,
+							e.pos.x,e.pos.x+8)and
+						InRange(
+							p.pos.y,
+							e.pos.y,e.pos.y+8)then
+				DestroyEnemy(i,j)
+			end
+		end
+	end
+end
+--System: Player
+player={
+	alive=true,
+	
+	speed=1,
+	sprN=0,
+	
+	pos={
+		x=120,
+		y=136-20
+	},
+	
+	bulletSpeed=3,
+	bullets={}
+}
+function MovePlayer(dir)
+	if player.pos.x+dir<0 or
+				player.pos.x+8+dir>240 then
+		return
+	end
+	
+	player.pos.x=
+		player.pos.x+player.speed*dir
+end
+function PlayerShoot()
+	local newBullet=GenPlayerBullet(
+		player.pos.x+4.5,
+		player.pos.y)
+		
+	table.insert(player.bullets,newBullet)
+end
+function DestroyPlayer()
+	player.alive=false
+	
+	local pos={
+		x=player.pos.x+4.5,
+		y=player.pos.y+4
+	}
+	GenExplosion(
+		pos,
+		3)
+end
+function GenPlayerBullet(x,y)
+	return{
+		pos={
+			x=x,
+			y=y
+		},
+		timer=60*1
+	}
+end
+
+--System: Particles
+particles={
+}
+function GenParticle(pos,vel,r,c,life)
+	local newParticle={
+		pos={
+			x=pos.x,
+			y=pos.y
+		},
+		vel={
+			x=vel.x,
+			y=vel.y
+		},
+		r=r,
+		c=c,
+		timer=60*2
+	}
+	
+	table.insert(particles,newParticle)
+end
+
+--System: Explosions
+explosions={
+}
+function GenExplosion(pos,n)
+	GenExplosion_Helper(pos,n,Colors.GREY)
+	GenExplosion_Helper(pos,n,Colors.ORANGE)
+	GenExplosion_Helper(pos,n,Colors.GREY)
+end
+function GenExplosion_Helper(pos,n,c)
+	for i=0,n do
+		local x=
+			pos.x+(math.random()-.5)*8
+		local y=
+			pos.y+(math.random()-.5)*8
+			
+		local rBase=4+math.random()*6
+		
+		local timer1Base=
+			60*math.random()*.2
+		local timer2Base=
+			60*2
+		
+		local newExplosion={
+			pos={
+				x=x,
+				y=y
+			},
+			
+			timer1Base=timer1Base, 
+			timer1=timer1Base,
+			
+			timer2Base=timer2Base,
+			timer2=timer2Base,
+			
+			rBase=rBase,
+			r=0,
+			
+			c=c
+		}
+		table.insert(explosions,newExplosion)
+	end
+end
+
+--System: Enemies
+enemies={}
+enemiesSettings={
+	ticDur=60,
+	switchSpr=0
+}
+function InitEnemies()
+	local w=8
+	local h=3
+	local l=16
+	local wL=l*w
+	local hL=l*h
+	local cX=120-(wL/2) -8
+	local cY=30-(hL/2)
+	
+	for i=0,w do
+		local x=i*l
+		x=x+cX
+		for j=0,h do
+			local y=j*l
+			y=y+cY
+			
+			local pos={
+				x=x,
+				y=y
+			}
+			GenEnemey(pos)
+		end
+	end
+end
+function GenEnemey(pos)
+	local newEnemey={
+		pos={
+			x=pos.x,
+			y=pos.y
+		}
+	}
+	
+	table.insert(enemies,newEnemey)
+end
+function DestroyEnemy(enemyI, bulletI)
+	local e=enemies[enemyI]
+	
+	local pos={
+		x=e.pos.x,
+		y=e.pos.y
+	}
+	GenExplosion(pos,3)
+	
+	table.remove(enemies,enemyI)
+	table.remove(player.bullets,bulletI)
+end
+
+--Math
+function RectCollide(rect1, rect2)
+	return 
+		rect1.x < rect2.x + rect2.width and
+		rect1.x + rect1.width > rect2.x and
+ 	rect1.y < rect2.y + rect2.height and
+  rect1.y + rect1.height > rect2.y
+end
+function InRange(v,min,max)
+	return (v<=max and v>=min)
+end

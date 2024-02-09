@@ -1,0 +1,416 @@
+function TIC()
+	Start()
+	Input()
+	Update()
+	Render()
+	
+	TicDynamic()
+end
+
+--Static flow
+---Start
+function Start()
+	if not started then
+		started=true
+	end
+end
+---Input
+function Input()
+	local speed=4
+	
+	if btn(0)then
+		MovePlayer(player1, -1)
+	elseif btn(1)then
+		MovePlayer(player1, 1)
+	end
+	
+	if btn(6)then
+		MovePlayer(player2, -1)
+	elseif btn(4)then
+		MovePlayer(player2, 1)
+	end
+end
+---Update
+function Update()
+	UpdateWave()
+	UpdateParticles()
+	UpdateExplosions()
+	if ball.canMove then
+		UpdateBallMovement()
+	end
+end
+function UpdateParticles()
+	--Movement
+	for _,p in ipairs(particles)do
+		p.x=
+			p.x+p.vel.x*p.speed
+		p.y=
+			p.y+p.vel.y*p.speed
+	end
+	--Life
+	for i=#particles,1,-1 do
+		local p=particles[i]
+		p.life=p.life-1
+		if p.life<=0 then
+			table.remove(particles,i)
+		end
+	end
+end
+function UpdateExplosions()
+	for i=#explosions,1,-1 do
+		local e=explosions[i]
+		
+		if e.timer1>=0 then
+	 	e.timer1=e.timer1-1
+			e.r=e.rBase*(1-(e.timer1/e.timer1Base))
+		elseif e.timer2>=0 then
+			e.timer2=e.timer2-1
+			e.r=e.rBase*(e.timer2/e.timer2Base)
+		else
+			table.remove(explosions, i)
+		end
+		
+	end
+end
+function ResetGame()
+	ball.canMove=false
+	ball.x=120
+	ball.y=-ball.r
+	scene_1.timer=0
+	scene_2.timer=0
+	scene_3.timer=0
+	scene_4.timer=0
+	curScene=1
+end
+---Generic Rendering
+Colors={
+	RED=1,
+	OFF_WHITE=2,
+	BALCK=3,
+	OFF_YELLOW=4,
+	ORANGE=5,
+	OFF_BLACK=6,
+	GREEN=7
+}
+function Render()
+	cls(3)
+	RenderParticles()
+	RenderExplosions()
+	RenderPlayers(player1,player2)
+	RenderBall()
+	print(#explosions,100,100,12)
+end
+function RenderParticles()
+	for _,p in ipairs(particles)do
+		circ(p.x,p.y,p.r,p.c)
+	end
+end
+function RenderExplosions()
+	for _,e in ipairs(explosions)do
+		circ(e.x,e.y,e.r,e.c)
+	end
+end	
+function RenderPlayers(...)
+	for _,player in ipairs({...})do
+		RenderPlayer(player)
+	end
+end
+function RenderPlayer(player)
+	rect(
+		player.x,player.y,
+		player.w,player.h,
+		12)
+end
+function RenderBall()
+	circ(
+	ball.x,ball.y,
+	ball.r,
+	ball.c)
+end
+
+--Dynamic flow
+curScene=1
+function TicDynamic()
+	if curScene==1 then
+		PlayScene1()
+	elseif curScene==2 then
+		PlayScene2()
+	elseif curScene==3 then
+		PlayScene3()
+	elseif curScene==4 then
+		PlayScene4()
+	end
+end
+---Scenes
+scene_1={
+	timer=0,
+	dur=60*1
+}
+function PlayScene1()
+	scene_1.timer=
+		scene_1.timer+1
+	if scene_1.timer>scene_1.dur then
+		scene_1.timer=0
+		curScene=curScene+1
+		return
+	end
+	
+	--Ball animation
+	ball.y=
+		(scene_1.timer/scene_1.dur)*68
+end
+
+scene_2={
+	timer=0,
+	dur=60*3
+}
+function PlayScene2()
+	scene_2.timer=scene_2.timer+1
+	if scene_2.timer>scene_2.dur then
+		scene_2.timer=0
+		curScene=curScene+1
+		ThrowBallRandomly()
+		ball.canMove=true
+		return
+	end
+	
+	local text="Ready"
+	PlayTextHovering(
+		text,
+		120-#text*2.9,20,
+		6)
+end
+
+scene_3={
+	timer=0,
+	dur=60*1
+}
+function PlayScene3()
+	scene_3.timer=
+		scene_3.timer+1
+	if scene_3.timer>scene_3.dur then
+		scene_3.timer=0
+		curScene=0
+		return
+	end
+	
+	print("GO", 120-8, 20, 1)
+end
+
+scene_4={
+	timer=0,
+	dur=60*.4
+}
+function PlayScene4()
+	scene_4.timer=
+		scene_4.timer+1
+	if scene_4.timer>scene_4.dur then
+		ResetGame()
+		return
+	end
+end
+
+--System: Players
+player1={
+	x=240-10-4,y=68,
+	w=4,h=20,
+	speed=3
+}
+player2={
+	x=10,y=68,
+	w=4,h=20,
+	speed=3
+}
+function MovePlayer(player, dir)
+	player.y=
+		CutOff(
+			player.y+dir*player.speed,
+			0,
+			136-player.h)
+end
+
+--System: Ball
+ball={
+	x=120,
+	y=0,
+	prevPos={x=0,y=0},
+	vel={x=0,y=0},
+	
+	speed=3,
+	r=2,
+	c=2,
+	
+	canMove=false
+}
+function ThrowBallRandomly()
+	local randomChoice=math.random()
+	if randomChoice<=.25 then
+		ball.vel.x=.5
+		ball.vel.y=.5
+	elseif randomChoice<=.5 then
+		ball.vel.x=.5
+		ball.vel.y=-.5
+	elseif randomChoice<=.75 then
+		ball.vel.x=-.5
+		ball.vel.y=-.5
+	elseif randomChoice<=1 then
+		ball.vel.x=-.5
+		ball.vel.y=.5
+	end
+	
+	--vfx
+end
+function UpdateBallMovement()
+	ball.prevPos.x=ball.x
+	ball.prevPos.y=ball.y
+	
+	ball.x=
+		ball.x+ball.vel.x*ball.speed
+	ball.y=
+		ball.y+ball.vel.y*ball.speed
+		
+	if ball.y<(0+ball.r) or ball.y>(136-ball.r)then
+		ball.y=ball.prevPos.y
+		ball.vel.y=-ball.vel.y
+	end
+	if BallCollided(player1) or BallCollided(player2)then
+		ball.x=ball.prevPos.x
+		ball.vel.x=-ball.vel.x
+	end
+	
+	if ball.x>240+ball.r or ball.x<0-ball.r then
+		curScene=4
+		InitEndExplosion(ball.x,ball.y,9)
+		ResetBall()
+	end
+	
+	--VFX
+	InitBallTailParticles(
+		3,ball.prevPos.x,ball.prevPos.y,3)
+end
+function BallCollided(player)
+	local xDiff=math.abs(ball.x-player.x)
+	local yDiff=math.abs(ball.y-player.y)
+	local colW=ball.r+(player.w)
+	local colH=ball.r+(player.h)
+	if xDiff<=colW then
+		if yDiff<=colH then
+			return true
+		end
+	end
+	return false
+end
+function ResetBall()
+	ball.x=-ball.r
+	ball.y=-ball.r
+	ball.vel.x=0
+	ball.vel.y=0
+	ball.canMove=false
+end
+
+--System: Particles
+particles={}
+explosions={}
+function InitBallTailParticles(n,cX,cY,speed)
+	for i=1,n do
+		local xRand,yRand=
+			(math.random()-.5)*3,(math.random()-.5)*3
+		
+		local vel={
+			x=-ball.vel.x,
+			y=-ball.vel.y}
+		
+		local newParticle=
+			GenParticle(
+				cX+xRand,cY+yRand,
+				vel,
+				math.random(),
+				speed,
+				4,
+				60/10)
+				
+		table.insert(particles, newParticle)
+	end
+end
+function GenParticle(x,y,vel,r,speed,c,life)
+	return {
+		x=x,y=y,
+		vel={
+			x=vel.x,
+			y=vel.y
+		},
+		r=r,
+		speed=speed,
+		c=c,
+		life=life
+	}
+end
+function InitEndExplosion(x,y,n)
+	InitEndExplosion_Helper(
+		x,y,n,
+		Colors.OFF_BLACK)
+	InitEndExplosion_Helper(
+		x,y,n,
+		Colors.ORANGE)
+	InitEndExplosion_Helper(
+		x,y,n,
+		Colors.OFF_BLACK)
+end
+function InitEndExplosion_Helper(x,y,n,c)
+	for i=1,n do
+		local r=5+(math.random()*6)
+		
+		local xEff=(math.random()-.5)*8
+		local yEff=(math.random()-.5)*8
+		
+		local life1=math.random()*60*.3
+		local life2=(1*60)+math.random()*60*.5
+
+		local newExplosion=GenExplosion(
+			x+xEff,y+yEff,
+			r,
+			life1,life2,
+			c)
+			
+		table.insert(explosions,newExplosion)
+	end
+end
+function GenExplosion(x,y,r,timer1,timer2,c)
+	return{
+		x=x,y=y,
+		rBase=r, r=0,
+		timer1Base=timer1,
+		timer1=timer1,
+		timer2Base=timer2,
+		timer2=timer2,
+		c=c
+	}
+end
+
+--Animation: Text
+function PlayTextHovering(text,x,y,c)
+	local eff=Y(0)*3
+	print(text,x,y+eff,c)
+end
+
+--Math
+function CutOff(v, min, max)
+	return 
+		(v<min and min)or
+		(v>max and max)or
+		v
+end
+function Lerp(a,b,t)
+	return a+(b-a)*t
+end
+--Other
+waveOffset=0
+waveSpeed=.03
+function UpdateWave()
+	waveOffset=
+		waveOffset+waveSpeed
+end
+function Y(x)
+	x=x+waveOffset
+	return math.sin(x)
+end
