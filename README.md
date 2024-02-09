@@ -1,2 +1,1 @@
-# Init
-
+# Arcade games made with Lua
